@@ -395,12 +395,12 @@ button { touch-action: manipulation; }
         </div>
 
         <div class="card">
-          <h2 class="section-title">人物追加</h2>
+          <h2 class="section-title">メンバー追加</h2>
           <div class="form-row">
             <input id="nameInput" class="name-input" type="text" maxlength="40" placeholder="名前を入力">
             <button class="primary-button" type="button" onclick="addPerson()">追加</button>
           </div>
-          <div class="small-note">新規人物の初期ポイントは、既存メンバーの外れ値除外後平均を四捨五入して決定します。</div>
+          <div class="small-note">新規メンバーの初期ポイントは、既存メンバーの外れ値除外後平均を四捨五入して決定します。</div>
         </div>
 
         <div class="card">
@@ -424,7 +424,7 @@ button { touch-action: manipulation; }
 
         <div class="footer-note">
           ポイントの直接編集はできません。誤操作時は逆方向のボタンで訂正してください。<br>
-          「今回スキップ」は7日以上同じ人物が当番になった場合に表示されます。<br>
+          「今回スキップ」は2日以上同じ人物が当番になった場合に表示されます。<br>
           <span id="footerVersion"></span>
         </div>
       </div>
@@ -437,7 +437,7 @@ button { touch-action: manipulation; }
 
 const APP_VERSION = "1.2.0";
 const STORAGE_KEY = "gomiDutySystem_v1";
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 
 let state = loadState();
 let currentPage = 0;
@@ -688,7 +688,7 @@ function dutyDurationDays(personId) {
 function isSevenDayWarning(personId) {
   const since = state.currentDuty.sinceById[personId];
   if (!since) return false;
-  return Date.now() - new Date(since).getTime() >= SEVEN_DAYS_MS;
+  return Date.now() - new Date(since).getTime() >= TWO_DAYS_MS;
 }
 
 function renderDuty() {
@@ -736,7 +736,7 @@ function renderDuty() {
 
   warningEl.innerHTML = `
     <div class="warning-box">
-      <div class="warning-title">⚠ 長期当番：7日以上継続しています</div>
+      <div class="warning-title">⚠ 長期当番：2日以上継続しています</div>
       ${warnings.map(p => `
         <div class="warning-person">
           <div><strong>${escapeHtml(p.name)} さん</strong>：${dutyDurationDays(p.personId)}日継続</div>
