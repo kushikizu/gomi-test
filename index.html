@@ -685,7 +685,7 @@ function dutyDurationDays(personId) {
   return Math.floor((Date.now() - new Date(since).getTime()) / (24 * 60 * 60 * 1000));
 }
 
-function isSevenDayWarning(personId) {
+function isTwoDayWarning(personId) {
   const since = state.currentDuty.sinceById[personId];
   if (!since) return false;
   return Date.now() - new Date(since).getTime() >= TWO_DAYS_MS;
@@ -713,22 +713,12 @@ function renderDuty() {
       <div class="duty-name">${escapeHtml(dutyPeople[0].name)} さん</div>
     `;
     messageEl.innerHTML = `
-      <div>2名以上登録すると2名を表示します</div>
-      <span class="duty-message-en">Two members will be shown when available.</span>
-    `;
-  } else {
-    namesEl.innerHTML = `
-      <div class="duty-name">${escapeHtml(dutyPeople[0].name)} さん</div>
-      <div class="duty-and">or</div>
-      <div class="duty-name">${escapeHtml(dutyPeople[1].name)} さん</div>
-    `;
-    messageEl.innerHTML = `
       <div>ゴミ捨てをお願いします</div>
       <span class="duty-message-en">Please take out the trash.</span>
     `;
   }
 
-  const warnings = dutyPeople.filter(p => isSevenDayWarning(p.personId));
+  const warnings = dutyPeople.filter(p => isTwoDayWarning(p.personId));
   if (warnings.length === 0) {
     warningEl.innerHTML = "";
     return;
