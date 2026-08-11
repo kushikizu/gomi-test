@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f4f4f4">
+<title>ゴミ当番ポイント管理</title>
+<style>
+:root {
+  --bg: #f4f4f4;
+  --card: #ffffff;
+  --text: #171717;
+  --muted: #666666;
+  --line: #dddddd;
+  --danger: #b42318;
+  --warning-bg: #fff3cd;
+  --warning-border: #e4b400;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+}
+body { overflow-x: hidden; }
+button, input { font: inherit; }
+button { touch-action: manipulation; }
+
+.app {
+  width: 100%;
+  min-height: 100dvh;
+  position: relative;
+  overflow: hidden;
+}
+.pages {
+  width: 200%;
+  min-height: 100dvh;
+  display: flex;
+  transition: transform 0.28s ease;
+}
+.pages.show-admin { transform: translateX(-50%); }
+.page {
+  width: 50%;
+  min-height: 100dvh;
+  flex: 0 0 50%;
+  padding: max(24px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+}
+
+/* 当番表示画面 */
+.duty-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+}
+.duty-title {
+  font-size: clamp(34px, 6vw, 60px);
+  font-weight: 800;
+  margin: 0 0 42px;
+}
+.duty-names {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+}
+.duty-name {
+  font-size: clamp(46px, 9vw, 88px);
+  font-weight: 900;
+  line-height: 1.05;
+  word-break: break-word;
+}
+.duty-and {
+  font-size: clamp(28px, 5vw, 48px);
+  color: var(--muted);
+  font-weight: 700;
+}
+.duty-message {
+  margin-top: 44px;
+  font-size: clamp(24px, 4vw, 40px);
+  font-weight: 700;
+}
+.duty-sub {
+  margin-top: 14px;
+  font-size: 18px;
+  color: var(--muted);
+}
+.warning-box {
+  margin-top: 28px;
+  width: min(760px, 95%);
+  background: var(--warning-bg);
+  border: 2px solid var(--warning-border);
+  border-radius: 16px;
+  padding: 16px;
+  text-align: left;
+}
+.warning-title {
+  font-weight: 800;
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+.warning-person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,0,0,0.12);
+}
+.warning-person:first-of-type { border-top: none; }
+.skip-button {
+  border: 1px solid #777;
+  background: white;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+.nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: rgba(255,255,255,0.8);
+  border-radius: 999px;
+  width: 54px;
+  height: 54px;
+  font-size: 34px;
+  line-height: 1;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+}
+.nav-right { right: 18px; }
+.nav-left { left: 18px; }
+
+/* 管理画面 */
+.admin-page { overflow-y: auto; }
+.admin-shell {
+  width: min(900px, 100%);
+  margin: 0 auto;
+}
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.admin-title {
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 800;
+  margin: 0;
+}
+.host-badge {
+  font-size: 14px;
+  color: var(--muted);
+  background: #eaeaea;
+  padding: 7px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.card {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+.section-title {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0 0 14px;
+}
+.person-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.person-row:last-child { border-bottom: none; }
+.person-name {
+  font-size: 24px;
+  font-weight: 800;
+  word-break: break-word;
+}
+.person-meta {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.point-value {
+  font-size: 28px;
+  font-weight: 900;
+  min-width: 90px;
+  text-align: right;
+}
+.point-controls {
+  display: flex;
+  gap: 8px;
+}
+.point-button {
+  width: 58px;
+  height: 52px;
+  border: none;
+  border-radius: 12px;
+  font-size: 28px;
+  font-weight: 900;
+  background: #e9e9e9;
+}
+.point-button:active { transform: scale(0.97); }
+.empty-message {
+  color: var(--muted);
+  padding: 14px 0;
+}
+.form-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.name-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #bdbdbd;
+  border-radius: 12px;
+  padding: 13px 14px;
+  font-size: 20px;
+  background: white;
+}
+.primary-button,
+.secondary-button,
+.danger-button {
+  border: none;
+  border-radius: 12px;
+  padding: 13px 18px;
+  font-weight: 800;
+}
+.primary-button { background: #222; color: white; }
+.secondary-button { background: #e9e9e9; color: #111; }
+.danger-button { background: #fee4e2; color: var(--danger); }
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.unregister-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.unregister-button {
+  border: 1px solid #bbb;
+  background: white;
+  border-radius: 999px;
+  padding: 9px 12px;
+}
+.small-note {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.footer-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  padding: 8px 0 28px;
+}
+
+@media (max-width: 650px) {
+  .person-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .point-controls {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+  .action-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="pages" id="pages">
+    <section class="page duty-page" id="dutyPage">
+      <button class="nav-arrow nav-right" type="button" aria-label="ポイント管理画面へ" onclick="showAdmin()">›</button>
+      <h1 class="duty-title">今日のゴミ当番</h1>
+      <div class="duty-names" id="dutyNames"></div>
+      <div class="duty-message" id="dutyMessage">ゴミ捨てをお願いします</div>
+      <div class="duty-sub">ポイント下位2名を自動表示</div>
+      <div id="warningArea"></div>
+    </section>
+
+    <section class="page admin-page" id="adminPage">
+      <div class="admin-shell">
+        <div class="admin-header">
+          <button class="secondary-button" type="button" aria-label="当番表示画面へ" onclick="showDuty()">‹ 当番表示</button>
+          <h1 class="admin-title">ポイント管理</h1>
+          <div class="host-badge">このiPadがホスト</div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">メンバー</h2>
+          <div id="memberList"></div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">人物追加</h2>
+          <div class="form-row">
+            <input id="nameInput" class="name-input" type="text" maxlength="40" placeholder="名前を入力">
+            <button class="primary-button" type="button" onclick="addPerson()">追加</button>
+          </div>
+          <div class="small-note">新規人物の初期ポイントは、既存メンバーの外れ値除外後平均を四捨五入して決定します。</div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">登録解除</h2>
+          <div id="unregisterList" class="unregister-list"></div>
+          <div class="small-note">登録解除しても履歴は削除されません。</div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">データ</h2>
+          <div class="action-grid">
+            <button class="secondary-button" type="button" onclick="exportCsv()">CSVを出力</button>
+            <button class="danger-button" type="button" onclick="resetAllData()">全データ初期化</button>
+          </div>
+          <div class="small-note">CSVは月1回以上、およびiPad更新・交換前の保存を推奨します。</div>
+        </div>
+
+        <div class="footer-note">
+          ポイントの直接編集はできません。誤操作時は逆方向のボタンで訂正してください。<br>
+          「今回スキップ」は7日以上同じ人物が当番になった場合に表示されます。
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const STORAGE_KEY = "gomiDutySystem_v1";
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+let state = loadState();
+let currentPage = 0;
+let touchStartX = null;
+
+function defaultState() {
+  return {
+    schemaVersion: 1,
+    nextPersonNumber: 1,
+    people: [],
+    logs: [],
+    skippedIds: [],
+    currentDuty: {
+      ids: [],
+      sinceById: {}
+    }
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.schemaVersion !== 1) return defaultState();
+    parsed.people = Array.isArray(parsed.people) ? parsed.people : [];
+    parsed.logs = Array.isArray(parsed.logs) ? parsed.logs : [];
+    parsed.skippedIds = Array.isArray(parsed.skippedIds) ? parsed.skippedIds : [];
+    parsed.currentDuty = parsed.currentDuty || { ids: [], sinceById: {} };
+    parsed.currentDuty.ids = Array.isArray(parsed.currentDuty.ids) ? parsed.currentDuty.ids : [];
+    parsed.currentDuty.sinceById = parsed.currentDuty.sinceById || {};
+    return parsed;
+  } catch (e) {
+    console.error("保存データの読み込みに失敗しました", e);
+    return defaultState();
+  }
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function formatLocalDateTime(isoString) {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function activePeople() {
+  return state.people.filter(p => p.active);
+}
+
+function personById(id) {
+  return state.people.find(p => p.personId === id) || null;
+}
+
+function createPersonId() {
+  const id = String(state.nextPersonNumber).padStart(4, "0");
+  state.nextPersonNumber += 1;
+  return id;
+}
+
+function addLog(event, person, change = "", total = "") {
+  state.logs.push({
+    timestamp: nowIso(),
+    event,
+    personId: person ? person.personId : "",
+    name: person ? person.name : "",
+    change,
+    total,
+    operator: "host"
+  });
+}
+
+function mean(values) {
+  if (values.length === 0) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function roundToNearestInt(value) {
+  return value >= 0 ? Math.floor(value + 0.5) : Math.ceil(value - 0.5);
+}
+
+function quantile(sortedValues, q) {
+  if (sortedValues.length === 0) return 0;
+  if (sortedValues.length === 1) return sortedValues[0];
+  const pos = (sortedValues.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  if (sortedValues[base + 1] !== undefined) {
+    return sortedValues[base] + rest * (sortedValues[base + 1] - sortedValues[base]);
+  }
+  return sortedValues[base];
+}
+
+function calculateInitialPoint() {
+  const points = activePeople().map(p => p.point);
+  if (points.length === 0) return 0;
+  if (points.length < 4) return roundToNearestInt(mean(points));
+
+  const sorted = [...points].sort((a, b) => a - b);
+  const q1 = quantile(sorted, 0.25);
+  const q3 = quantile(sorted, 0.75);
+  const iqr = q3 - q1;
+  const lower = q1 - 1.5 * iqr;
+  const upper = q3 + 1.5 * iqr;
+  const filtered = sorted.filter(v => v >= lower && v <= upper);
+  const target = filtered.length > 0 ? filtered : sorted;
+  return roundToNearestInt(mean(target));
+}
+
+function compareDutyCandidates(a, b) {
+  if (a.point !== b.point) return a.point - b.point;
+
+  const aLast = a.lastAssignedAt ? new Date(a.lastAssignedAt).getTime() : -Infinity;
+  const bLast = b.lastAssignedAt ? new Date(b.lastAssignedAt).getTime() : -Infinity;
+  if (aLast !== bLast) return aLast - bLast;
+
+  const aCreated = new Date(a.createdAt).getTime();
+  const bCreated = new Date(b.createdAt).getTime();
+  if (aCreated !== bCreated) return aCreated - bCreated;
+
+  return a.personId.localeCompare(b.personId);
+}
+
+function recalculateDuty() {
+  const now = nowIso();
+  const previousIds = [...state.currentDuty.ids];
+  const previousSince = { ...state.currentDuty.sinceById };
+
+  const candidates = activePeople()
+    .filter(p => !state.skippedIds.includes(p.personId))
+    .sort(compareDutyCandidates);
+
+  const newIds = candidates.slice(0, 2).map(p => p.personId);
+  const newSince = {};
+
+  for (const id of newIds) {
+    if (previousIds.includes(id) && previousSince[id]) {
+      newSince[id] = previousSince[id];
+    } else {
+      newSince[id] = now;
+      const p = personById(id);
+      if (p) p.lastAssignedAt = now;
+    }
+  }
+
+  state.currentDuty = {
+    ids: newIds,
+    sinceById: newSince
+  };
+  saveState();
+}
+
+function ensureDutyValid() {
+  const activeIds = new Set(activePeople().map(p => p.personId));
+  const valid = state.currentDuty.ids.every(id => activeIds.has(id) && !state.skippedIds.includes(id));
+  const expectedCount = Math.min(2, activePeople().filter(p => !state.skippedIds.includes(p.personId)).length);
+  if (!valid || state.currentDuty.ids.length !== expectedCount) {
+    recalculateDuty();
+  }
+}
+
+function addPerson() {
+  const input = document.getElementById("nameInput");
+  const name = input.value.trim();
+  if (!name) {
+    alert("名前を入力してください。");
+    return;
+  }
+
+  const duplicate = activePeople().some(p => p.name === name);
+  if (duplicate) {
+    const ok = confirm(`「${name}」はすでに登録されています。同じ名前で追加しますか？`);
+    if (!ok) return;
+  }
+
+  const person = {
+    personId: createPersonId(),
+    name,
+    point: calculateInitialPoint(),
+    active: true,
+    createdAt: nowIso(),
+    lastAssignedAt: null
+  };
+
+  state.people.push(person);
+  addLog("ADD", person, "", person.point);
+  input.value = "";
+  recalculateDuty();
+  renderAll();
+}
+
+function changePoint(personId, delta) {
+  const person = personById(personId);
+  if (!person || !person.active) return;
+
+  person.point += delta;
+  addLog("POINT", person, delta > 0 ? "+1" : "-1", person.point);
+
+  // 「今回スキップ」は、次のポイント操作が行われた時点で消費済みとみなす。
+  state.skippedIds = [];
+  recalculateDuty();
+  renderAll();
+}
+
+function unregisterPerson(personId) {
+  const person = personById(personId);
+  if (!person || !person.active) return;
+
+  const ok = confirm(`${person.name} さんを登録解除しますか？\n\n過去の履歴は残ります。`);
+  if (!ok) return;
+
+  person.active = false;
+  state.skippedIds = state.skippedIds.filter(id => id !== personId);
+  addLog("DELETE", person, "", person.point);
+  recalculateDuty();
+  renderAll();
+}
+
+function skipOnce(personId) {
+  const person = personById(personId);
+  if (!person || !person.active) return;
+  if (!state.currentDuty.ids.includes(personId)) return;
+
+  const ok = confirm(`${person.name} さんを今回だけ当番候補から外しますか？\n\nポイントは変わりません。`);
+  if (!ok) return;
+
+  if (!state.skippedIds.includes(personId)) {
+    state.skippedIds.push(personId);
+  }
+  addLog("SKIP", person, "", person.point);
+  recalculateDuty();
+  renderAll();
+}
+
+function dutyDurationDays(personId) {
+  const since = state.currentDuty.sinceById[personId];
+  if (!since) return 0;
+  return Math.floor((Date.now() - new Date(since).getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function isSevenDayWarning(personId) {
+  const since = state.currentDuty.sinceById[personId];
+  if (!since) return false;
+  return Date.now() - new Date(since).getTime() >= SEVEN_DAYS_MS;
+}
+
+function renderDuty() {
+  const namesEl = document.getElementById("dutyNames");
+  const messageEl = document.getElementById("dutyMessage");
+  const warningEl = document.getElementById("warningArea");
+
+  const dutyPeople = state.currentDuty.ids.map(personById).filter(Boolean);
+
+  if (dutyPeople.length === 0) {
+    namesEl.innerHTML = '<div class="duty-name">メンバー未登録</div>';
+    messageEl.textContent = "ポイント管理画面から登録してください";
+    warningEl.innerHTML = "";
+    return;
+  }
+
+  if (dutyPeople.length === 1) {
+    namesEl.innerHTML = `<div class="duty-name">${escapeHtml(dutyPeople[0].name)} さん</div>`;
+    messageEl.textContent = "2名以上登録すると2名を表示します";
+  } else {
+    namesEl.innerHTML = `
+      <div class="duty-name">${escapeHtml(dutyPeople[0].name)} さん</div>
+      <div class="duty-and">＆</div>
+      <div class="duty-name">${escapeHtml(dutyPeople[1].name)} さん</div>
+    `;
+    messageEl.textContent = "ゴミ捨てをお願いします";
+  }
+
+  const warnings = dutyPeople.filter(p => isSevenDayWarning(p.personId));
+  if (warnings.length === 0) {
+    warningEl.innerHTML = "";
+    return;
+  }
+
+  warningEl.innerHTML = `
+    <div class="warning-box">
+      <div class="warning-title">⚠ 長期当番：7日以上継続しています</div>
+      ${warnings.map(p => `
+        <div class="warning-person">
+          <div><strong>${escapeHtml(p.name)} さん</strong>：${dutyDurationDays(p.personId)}日継続</div>
+          <button class="skip-button" type="button" onclick="skipOnce('${p.personId}')">今回スキップ</button>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderMembers() {
+  const listEl = document.getElementById("memberList");
+  const members = activePeople();
+
+  if (members.length === 0) {
+    listEl.innerHTML = '<div class="empty-message">登録メンバーはいません。</div>';
+    return;
+  }
+
+  listEl.innerHTML = members.map(p => {
+    const isDuty = state.currentDuty.ids.includes(p.personId);
+    const isSkipped = state.skippedIds.includes(p.personId);
+    const status = isSkipped ? "今回スキップ中" : (isDuty ? "現在の当番" : "");
+    return `
+      <div class="person-row">
+        <div>
+          <div class="person-name">${escapeHtml(p.name)}</div>
+          <div class="person-meta">ID ${p.personId}${status ? ` ・ ${status}` : ""}</div>
+        </div>
+        <div class="point-value">${p.point} point</div>
+        <div class="point-controls">
+          <button class="point-button" type="button" aria-label="${escapeHtml(p.name)}を1ポイント減らす" onclick="changePoint('${p.personId}', -1)">−</button>
+          <button class="point-button" type="button" aria-label="${escapeHtml(p.name)}を1ポイント増やす" onclick="changePoint('${p.personId}', 1)">＋</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderUnregisterList() {
+  const el = document.getElementById("unregisterList");
+  const members = activePeople();
+  if (members.length === 0) {
+    el.innerHTML = '<div class="empty-message">登録解除できる人物はいません。</div>';
+    return;
+  }
+  el.innerHTML = members.map(p => `
+    <button class="unregister-button" type="button" onclick="unregisterPerson('${p.personId}')">${escapeHtml(p.name)}を登録解除</button>
+  `).join("");
+}
+
+function renderAll() {
+  ensureDutyValid();
+  renderDuty();
+  renderMembers();
+  renderUnregisterList();
+}
+
+function csvEscape(value) {
+  const s = String(value ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function exportCsv() {
+  const header = ["timestamp", "event", "person_id", "name", "change", "total", "operator"];
+  const rows = state.logs.map(log => [
+    formatLocalDateTime(log.timestamp),
+    log.event,
+    log.personId,
+    log.name,
+    log.change,
+    log.total,
+    log.operator
+  ]);
+
+  const csv = [header, ...rows].map(row => row.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gomi_point_log_${fileTimestamp()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function fileTimestamp() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+function resetAllData() {
+  const first = confirm("全人物・ポイント・履歴を初期化します。\n\nこの操作は元に戻せません。続けますか？");
+  if (!first) return;
+  const second = confirm("最終確認です。\n\n本当に全データを削除しますか？");
+  if (!second) return;
+
+  state = defaultState();
+  saveState();
+  renderAll();
+  showDuty();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function showDuty() {
+  currentPage = 0;
+  document.getElementById("pages").classList.remove("show-admin");
+}
+
+function showAdmin() {
+  currentPage = 1;
+  document.getElementById("pages").classList.add("show-admin");
+}
+
+function handleTouchStart(e) {
+  if (e.touches.length !== 1) return;
+  touchStartX = e.touches[0].clientX;
+}
+
+function handleTouchEnd(e) {
+  if (touchStartX === null || e.changedTouches.length !== 1) return;
+  const endX = e.changedTouches[0].clientX;
+  const dx = endX - touchStartX;
+  touchStartX = null;
+
+  if (Math.abs(dx) < 70) return;
+  if (dx < 0 && currentPage === 0) showAdmin();
+  if (dx > 0 && currentPage === 1) showDuty();
+}
+
+document.getElementById("app").addEventListener("touchstart", handleTouchStart, { passive: true });
+document.getElementById("app").addEventListener("touchend", handleTouchEnd, { passive: true });
+document.getElementById("nameInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") addPerson();
+});
+
+ensureDutyValid();
+renderAll();
+
+// iPadで長時間表示したままでも、7日警告が自動的に現れるよう1分ごとに表示を更新する。
+setInterval(renderDuty, 60 * 1000);
+</script>
+</body>
+</html>
