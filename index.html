@@ -62,9 +62,22 @@ button { touch-action: manipulation; }
   position: relative;
 }
 .duty-title {
+  width: 100%;
+  margin: 0 0 28px;
+  padding: 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.duty-title-ja {
+  display: block;
+  width: 100%;
+  text-align: center;
   font-size: clamp(34px, 6vw, 60px);
   font-weight: 800;
-  margin: 0 0 42px;
+  line-height: 1.15;
 }
 .duty-names {
   display: flex;
@@ -139,26 +152,6 @@ button { touch-action: manipulation; }
   line-height: 1;
   box-shadow: 0 2px 10px rgba(0,0,0,0.12);
 }
-.duty-title {
-  width: 100%;
-  margin: 0 0 42px;
-  padding: 0;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.duty-title-ja {
-  display: block;
-  width: 100%;
-  text-align: center;
-  font-size: clamp(34px, 6vw, 60px);
-  font-weight: 800;
-  line-height: 1.15;
-}
-
 .duty-title-en {
   display: block;
   width: 100%;
@@ -182,6 +175,33 @@ button { touch-action: manipulation; }
     font-size: 0.8em;
     margin-top: 4px;
     opacity: 0.65;
+}
+.duty-title,
+.duty-names,
+.duty-message,
+.duty-sub {
+  width: 100%;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.duty-title-en,
+.duty-message-en,
+.duty-sub-en {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+.version-badge {
+  position: absolute;
+  left: 50%;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: var(--muted);
+  opacity: 0.72;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .nav-right { right: 18px; }
 .nav-left { left: 18px; }
@@ -339,20 +359,26 @@ button { touch-action: manipulation; }
   <div class="pages" id="pages">
     <section class="page duty-page" id="dutyPage">
       <button class="nav-arrow nav-right" type="button" aria-label="ポイント管理画面へ" onclick="showAdmin()">›</button>
-     <h1 class="duty-title">
-       <span class="duty-title-ja">今日のゴミ当番</span>
-       <span class="duty-title-en">Today's Trash Duty</span>
-     </h1>
+
+      <h1 class="duty-title">
+        <span class="duty-title-ja">今日のゴミ当番</span>
+        <span class="duty-title-en">Today's Trash Duty</span>
+      </h1>
+
       <div class="duty-names" id="dutyNames"></div>
+
       <div class="duty-message" id="dutyMessage">
-      	ゴミ捨てをお願いします
- 　　   <span class="duty-message-en">Please take out the trash.</span>
- 　　 </div>
+        <div>ゴミ捨てをお願いします</div>
+        <span class="duty-message-en">Please take out the trash.</span>
+      </div>
+
       <div class="duty-sub">
-      	ポイント下位2名を自動表示
- 	　  <span class="duty-sub-en">The two members with the lowest points are shown automatically.</span>
- 	　</div>
+        ポイント下位2名を自動表示
+        <span class="duty-sub-en">The two members with the lowest points are shown automatically.</span>
+      </div>
+
       <div id="warningArea"></div>
+      <div class="version-badge" id="versionBadge"></div>
     </section>
 
     <section class="page admin-page" id="adminPage">
@@ -387,14 +413,19 @@ button { touch-action: manipulation; }
           <h2 class="section-title">データ</h2>
           <div class="action-grid">
             <button class="secondary-button" type="button" onclick="exportCsv()">CSVを出力</button>
+            <button class="secondary-button" type="button" onclick="exportBackup()">完全バックアップを保存</button>
+            <button class="secondary-button" type="button" onclick="document.getElementById('backupFileInput').click()">バックアップから復元</button>
+            <button class="secondary-button" type="button" onclick="forceReload()">最新版を再読み込み</button>
             <button class="danger-button" type="button" onclick="resetAllData()">全データ初期化</button>
           </div>
-          <div class="small-note">CSVは月1回以上、およびiPad更新・交換前の保存を推奨します。</div>
+          <input id="backupFileInput" type="file" accept="application/json,.json" hidden onchange="restoreBackup(event)">
+          <div class="small-note">CSVは履歴確認用です。端末の作り直し・アプリ再追加前には「完全バックアップを保存」でJSONバックアップを保存してください。</div>
         </div>
 
         <div class="footer-note">
           ポイントの直接編集はできません。誤操作時は逆方向のボタンで訂正してください。<br>
-          「今回スキップ」は7日以上同じ人物が当番になった場合に表示されます。
+          「今回スキップ」は7日以上同じ人物が当番になった場合に表示されます。<br>
+          <span id="footerVersion"></span>
         </div>
       </div>
     </section>
@@ -404,6 +435,7 @@ button { touch-action: manipulation; }
 <script>
 "use strict";
 
+const APP_VERSION = "1.2.0";
 const STORAGE_KEY = "gomiDutySystem_v1";
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -668,29 +700,31 @@ function renderDuty() {
 
   if (dutyPeople.length === 0) {
     namesEl.innerHTML = '<div class="duty-name">メンバー未登録</div>';
-    messageEl.textContent = "ポイント管理画面から登録してください";
+    messageEl.innerHTML = `
+      <div>ポイント管理画面から登録してください</div>
+      <span class="duty-message-en">Please add members on the point management page.</span>
+    `;
     warningEl.innerHTML = "";
     return;
   }
 
   if (dutyPeople.length === 1) {
     namesEl.innerHTML = `
-        <div class="duty-name">${escapeHtml(dutyPeople[0].name)} さん</div>
+      <div class="duty-name">${escapeHtml(dutyPeople[0].name)} さん</div>
     `;
     messageEl.innerHTML = `
-        <div>2名以上登録すると2名を表示します</div>
-        <span class="duty-message-en">Two members will be shown when available.</span>
+      <div>2名以上登録すると2名を表示します</div>
+      <span class="duty-message-en">Two members will be shown when available.</span>
     `;
   } else {
     namesEl.innerHTML = `
-        <div class="duty-name">${escapeHtml(dutyPeople[0].name)} さん</div>
-        <div class="duty-and">or</div>
-        <div class="duty-name">${escapeHtml(dutyPeople[1].name)} さん</div>
+      <div class="duty-name">${escapeHtml(dutyPeople[0].name)} さん</div>
+      <div class="duty-and">or</div>
+      <div class="duty-name">${escapeHtml(dutyPeople[1].name)} さん</div>
     `;
-
     messageEl.innerHTML = `
-        <div>ゴミ捨てをお願いします</div>
-        <span class="duty-message-en">Please take out the trash.</span>
+      <div>ゴミ捨てをお願いします</div>
+      <span class="duty-message-en">Please take out the trash.</span>
     `;
   }
 
@@ -759,6 +793,7 @@ function renderAll() {
   renderDuty();
   renderMembers();
   renderUnregisterList();
+  renderVersion();
 }
 
 function csvEscape(value) {
@@ -795,6 +830,115 @@ function fileTimestamp() {
   const d = new Date();
   const pad = n => String(n).padStart(2, "0");
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+function exportBackup() {
+  const backup = {
+    app: "gomi-duty-point-manager",
+    backupVersion: 1,
+    appVersion: APP_VERSION,
+    exportedAt: nowIso(),
+    state: state
+  };
+
+  const json = JSON.stringify(backup, null, 2);
+  const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gomi_backup_${fileTimestamp()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function normalizeBackupState(candidate) {
+  if (!candidate || candidate.schemaVersion !== 1) {
+    throw new Error("対応していないバックアップ形式です。");
+  }
+  if (!Array.isArray(candidate.people) || !Array.isArray(candidate.logs)) {
+    throw new Error("人物情報または履歴情報がありません。");
+  }
+
+  const restored = JSON.parse(JSON.stringify(candidate));
+  restored.people = restored.people.map(p => ({
+    personId: String(p.personId ?? ""),
+    name: String(p.name ?? ""),
+    point: Number.isFinite(Number(p.point)) ? Number(p.point) : 0,
+    active: Boolean(p.active),
+    createdAt: p.createdAt || nowIso(),
+    lastAssignedAt: p.lastAssignedAt || null
+  }));
+  restored.logs = Array.isArray(restored.logs) ? restored.logs : [];
+  restored.skippedIds = Array.isArray(restored.skippedIds) ? restored.skippedIds.map(String) : [];
+  restored.currentDuty = restored.currentDuty || { ids: [], sinceById: {} };
+  restored.currentDuty.ids = Array.isArray(restored.currentDuty.ids) ? restored.currentDuty.ids.map(String) : [];
+  restored.currentDuty.sinceById = restored.currentDuty.sinceById || {};
+
+  const maxId = restored.people.reduce((max, p) => {
+    const n = Number.parseInt(p.personId, 10);
+    return Number.isFinite(n) ? Math.max(max, n) : max;
+  }, 0);
+  const proposedNext = Number.parseInt(restored.nextPersonNumber, 10);
+  restored.nextPersonNumber = Number.isFinite(proposedNext) ? Math.max(proposedNext, maxId + 1) : maxId + 1;
+  restored.schemaVersion = 1;
+  return restored;
+}
+
+function restoreBackup(event) {
+  const input = event.target;
+  const file = input.files && input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function() {
+    try {
+      const parsed = JSON.parse(String(reader.result));
+      const candidate = parsed && parsed.state ? parsed.state : parsed;
+      const restored = normalizeBackupState(candidate);
+
+      const ok = confirm(
+        `バックアップから復元しますか？\n\n` +
+        `現在の人物・ポイント・履歴は、選択したバックアップ内容で置き換わります。\n` +
+        `復元前に現在の完全バックアップを保存しておくことを推奨します。`
+      );
+      if (!ok) return;
+
+      state = restored;
+      saveState();
+      ensureDutyValid();
+      renderAll();
+      showDuty();
+      alert("バックアップを復元しました。");
+    } catch (e) {
+      console.error("バックアップの復元に失敗しました", e);
+      alert("バックアップを復元できませんでした。正しいJSONバックアップファイルを選択してください。");
+    } finally {
+      input.value = "";
+    }
+  };
+  reader.onerror = function() {
+    input.value = "";
+    alert("バックアップファイルを読み込めませんでした。");
+  };
+  reader.readAsText(file, "utf-8");
+}
+
+function forceReload() {
+  const ok = confirm("GitHub Pagesから最新版を再読み込みしますか？\n\n人物・ポイント・履歴はこの端末の保存データを引き続き使用します。");
+  if (!ok) return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("reload", Date.now().toString());
+  window.location.replace(url.toString());
+}
+
+function renderVersion() {
+  const text = `Version ${APP_VERSION}`;
+  const badge = document.getElementById("versionBadge");
+  const footer = document.getElementById("footerVersion");
+  if (badge) badge.textContent = text;
+  if (footer) footer.textContent = text;
 }
 
 function resetAllData() {
