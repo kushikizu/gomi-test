@@ -110,7 +110,7 @@ button { touch-action: manipulation; }
 }
 .warning-box {
   margin-top: 28px;
-  width: min(760px, 95%);
+  width: min(760px, 100%);
   background: var(--warning-bg);
   border: 2px solid var(--warning-border);
   border-radius: 16px;
@@ -377,7 +377,7 @@ button { touch-action: manipulation; }
         <span class="duty-sub-en">The member with the lowest points is shown automatically.</span>
       </div>
 
-      <div id="warningArea"></div>
+      <div id="skipArea"></div>
       <div class="version-badge" id="versionBadge"></div>
     </section>
 
@@ -424,7 +424,7 @@ button { touch-action: manipulation; }
 
         <div class="footer-note">
           ポイントの直接編集はできません。誤操作時は逆方向のボタンで訂正してください。<br>
-          「今回スキップ」は2日以上同じ人物が当番になった場合に表示されます。<br>
+          「今回スキップ」は当番の人が不在の場合に押してください。<br>
           <span id="footerVersion"></span>
         </div>
       </div>
@@ -435,9 +435,9 @@ button { touch-action: manipulation; }
 <script>
 "use strict";
 
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 const STORAGE_KEY = "gomiDutySystem_v1";
-const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000
+//const TWO_DAYS_MS = 0 * 24 * 60 * 60 * 1000
 
 let state = loadState();
 let currentPage = 0;
@@ -573,9 +573,17 @@ function recalculateDuty() {
   const previousIds = [...state.currentDuty.ids];
   const previousSince = { ...state.currentDuty.sinceById };
 
-  const candidates = activePeople()
+  let candidates = activePeople()
     .filter(p => !state.skippedIds.includes(p.personId))
     .sort(compareDutyCandidates);
+
+  // 全員がスキップされた場合は、全員のスキップを解除する
+  if (candidates.length === 0 && activePeople().length > 0) {
+    state.skippedIds = [];
+
+    candidates = activePeople()
+      .sort(compareDutyCandidates);
+  }
 
   const newIds = candidates.slice(0, 1).map(p => p.personId);
   const newSince = {};
@@ -594,6 +602,7 @@ function recalculateDuty() {
     ids: newIds,
     sinceById: newSince
   };
+
   saveState();
 }
 
@@ -685,57 +694,90 @@ function dutyDurationDays(personId) {
   return Math.floor((Date.now() - new Date(since).getTime()) / (24 * 60 * 60 * 1000));
 }
 
-function isTwoDayWarning(personId) {
-  const since = state.currentDuty.sinceById[personId];
-  if (!since) return false;
-  return Date.now() - new Date(since).getTime() >= TWO_DAYS_MS;
-}
+//function isTwoDayWarning(personId) {
+//  const since = state.currentDuty.sinceById[personId];
+//  if (!since) return false;
+//  return Date.now() - new Date(since).getTime() >= TWO_DAYS_MS;
+//}
 
 function renderDuty() {
   const namesEl = document.getElementById("dutyNames");
   const messageEl = document.getElementById("dutyMessage");
-  const warningEl = document.getElementById("warningArea");
+  const skipEl = document.getElementById("skipArea");
 
   const dutyPeople = state.currentDuty.ids.map(personById).filter(Boolean);
 
+  // 当番が存在しない場合
   if (dutyPeople.length === 0) {
-    namesEl.innerHTML = '<div class="duty-name">メンバー未登録</div>';
-    messageEl.innerHTML = `
-      <div>ポイント管理画面から登録してください</div>
-      <span class="duty-message-en">Please add members on the point management page.</span>
-    `;
-    warningEl.innerHTML = "";
+
+    // そもそもメンバーが登録されていない
+    if (activePeople().length === 0) {
+      namesEl.innerHTML = '<div class="duty-name">メンバー未登録</div>';
+      messageEl.innerHTML = `
+        <div>ポイント管理画面から登録してください</div>
+        <span class="duty-message-en">Please add members on the point management page.</span>
+      `;
+    }
+
+    // メンバーはいるが全員スキップされている
+    else {
+      namesEl.innerHTML = '<div class="duty-name">当番候補なし</div>';
+      messageEl.innerHTML = `
+        <div>現在、全員がスキップされています</div>
+        <span class="duty-message-en">All members are currently skipped.</span>
+      `;
+    }
+
+    skipEl.innerHTML = "";
     return;
   }
 
-  if (dutyPeople.length === 1) {
-    namesEl.innerHTML = `
-      <div class="duty-name">${escapeHtml(dutyPeople[0].name)} さん</div>
-    `;
-    messageEl.innerHTML = `
-      <div>ゴミ捨てをお願いします</div>
-      <span class="duty-message-en">Please take out the trash.</span>
-    `;
-  }
+  // 現在の当番
+  const dutyPerson = dutyPeople[0];
 
-  const warnings = dutyPeople.filter(p => isTwoDayWarning(p.personId));
-  if (warnings.length === 0) {
-    warningEl.innerHTML = "";
-    return;
-  }
+  namesEl.innerHTML = `
+    <div class="duty-name">${escapeHtml(dutyPerson.name)} さん</div>
+  `;
 
-  warningEl.innerHTML = `
+  messageEl.innerHTML = `
+    <div>ゴミ捨てをお願いします</div>
+    <span class="duty-message-en">Please take out the trash.</span>
+  `;
+
+  // 継続日数とスキップボタンを常時表示
+  skipEl.innerHTML = `
     <div class="warning-box">
-      <div class="warning-title">⚠ 長期当番：2日以上継続しています</div>
-      ${warnings.map(p => `
-        <div class="warning-person">
-          <div><strong>${escapeHtml(p.name)} さん</strong>：${dutyDurationDays(p.personId)}日継続</div>
-          <button class="skip-button" type="button" onclick="skipOnce('${p.personId}')">今回スキップ</button>
+      <div class="warning-person">
+        <div>
+          <strong>${escapeHtml(dutyPerson.name)} さん</strong>：
+          ${dutyDurationDays(dutyPerson.personId)}日継続
         </div>
-      `).join("")}
+        <button class="skip-button" type="button" onclick="skipOnce('${dutyPerson.personId}')">
+          今回スキップ
+        </button>
+      </div>
     </div>
   `;
 }
+
+//  const warnings = dutyPeople.filter(p => isTwoDayWarning(p.personId));
+//  if (warnings.length === 0) {
+//    warningEl.innerHTML = "";
+//    return;
+//  }
+//
+//  warningEl.innerHTML = `
+//    <div class="warning-box">
+//      <div class="warning-title">
+//      ${warnings.map(p => `
+//        <div class="warning-person">
+//          <div><strong>${escapeHtml(p.name)} さん</strong>：${dutyDurationDays(p.personId)}日継続</div>
+//          <button class="skip-button" type="button" onclick="skipOnce('${p.personId}')">今回スキップ</button>
+//        </div>
+//      `).join("")}
+//    </div>
+//  `;
+//}
 
 function renderMembers() {
   const listEl = document.getElementById("memberList");
@@ -987,7 +1029,7 @@ document.getElementById("nameInput").addEventListener("keydown", e => {
 ensureDutyValid();
 renderAll();
 
-// iPadで長時間表示したままでも、2日警告が自動的に現れるよう1分ごとに表示を更新する。
+// iPadで長時間表示したままでも、当番の継続日数が自動更新されるよう1分ごとに再描画する。
 setInterval(renderDuty, 60 * 1000);
 </script>
 </body>
