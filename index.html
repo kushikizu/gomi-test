@@ -649,12 +649,22 @@ function changePoint(personId, delta) {
   const person = personById(personId);
   if (!person || !person.active) return;
 
+  // ポイント変更前に、その人が現在の当番か確認する
+  const isDuty = state.currentDuty.ids.includes(personId);
+
   person.point += delta;
   addLog("POINT", person, delta > 0 ? "+1" : "-1", person.point);
 
-  // 「今回スキップ」は、次のポイント操作が行われた時点で消費済みとみなす。
-  state.skippedIds = [];
-  recalculateDuty();
+  if (isDuty) {
+    // 現在の当番がポイントを変更した場合は、
+    // 今回のスキップを解除して次の当番を再計算する
+    state.skippedIds = [];
+    recalculateDuty();
+  } else {
+    // 当番以外の人のポイント変更では当番を変えない
+    saveState();
+  }
+
   renderAll();
 }
 
